@@ -15,7 +15,7 @@
 #include <pthread.h>		//pthread_mutex_t
 
 //defintions
-#define _GNU_SOURCE
+#define _GNU_SOURCE			//getline
 #define DIR_PREFIX "satterwc.rooms."
 
 //global variables
