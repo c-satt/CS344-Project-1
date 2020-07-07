@@ -62,10 +62,10 @@ int main(){
 
 	//create file note: file name = satterwc.rooms.random_number
 	char dirName[100];
-	sprintf(dirName, "satterwc.rooms.%d", random);
+	sprintf(dirName, "satterwc.rooms.%d/", random);
 	//printf("%s\n", fileName ); 
 	//permissions set to create, read and write for the creator, no one else can change it
-	mkdir(dirName, 0755); 
+	mkdir(dirName, 0777); 
 
 	//initalize the room values
 	makeRooms(rooms, roomNames, roomTypes);

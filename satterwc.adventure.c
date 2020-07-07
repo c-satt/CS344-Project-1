@@ -198,12 +198,12 @@ void parseRoomFile(char *roomFileName, char *dirName, struct Room *rooms[]){
 	FILE *fp;
 	char *line = NULL;
 	size_t len = 0;
-	ssize_t read;
+	//ssize_t read;
 
 	//open room file to read
 	fp = fopen(roomPathName, "r");
 
-	while ((read = getline(&line, &len, fp)) != EOF){
+	while ((getline(&line, &len, fp)) != -1){
 		//uncomment me to see room info untouched
 		//printf("%s", line);
 
