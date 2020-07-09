@@ -1,6 +1,6 @@
 /** Author: Chelsea Satterwhite
  ** Date: 7/2/2020
- **	Assignment: Project #1 Adventure Program
+ ** Assignment: Project #1 Adventure Program
  ** Description: Adventure program which reads from most recently created rooms directory to 
  		traverse the dungeon. The user can move to different rooms by typing the name of the 
  		room. The game is done and will exit once the user reaches the end room. 
@@ -13,14 +13,15 @@
 #include <sys/types.h>		//ssize_t
 #include <dirent.h>			//dir			
 #include <pthread.h>		//pthread_mutex_t
+#include <unistd.h>			//read
 
 //defintions
-#define _GNU_SOURCE			//getline
 #define DIR_PREFIX "satterwc.rooms."
 
 //global variables
 int MAX_DUNEGON_ROOMS = 7;
-//pthread_mutex_t mutex;
+char *NAMES[10] = {"slime", "treasure", "trap", "ogre", "dragon",
+		"gold", "health", "mana", "bat", "boss"};
 
 struct Room {
 	char *roomName;
@@ -31,74 +32,90 @@ struct Room {
 
 //prototype function declarations
 char *findLatestDirectory(char *path, char *prefix);	//from lecture
-void getRoomFiles(char *recentDir, struct Room *rooms[]);
 void initiateRooms(struct Room *rooms[], int size);
 void deleteRooms(struct Room *rooms[], int size);
-void parseRoomFile(char *roomFileName, char *dirName, struct Room *rooms[]);
-int getStartingRoom(struct Room *rooms[]);
 int checkConnection(struct Room *room, char roomName[]);
-int getRoomByName(struct Room *room, char roomName[]);
-//int createRooms(char *recentDir, struct Room *rooms, int *start_room);
+int getRoomByName(struct Room *room[], char roomName[]);
+int fillRooms(const char *dirName, struct Room *rooms[], int start_room);
 void printRooms(struct Room *rooms[]);
 
 int main(){
 	char *latestDir = findLatestDirectory(".", DIR_PREFIX);
-	//printf("Latest direcotry is %s\n", latestDir);
 	struct Room *rooms[MAX_DUNEGON_ROOMS];
 	int currentRoom = 0;
-	int stepCount;
-	int endGame = 1;
+	int stepCount = 0;
+	
+	/************************/
+	//uncomment before submission
+	int endGame = 0;
+	/************************/
+	
 	char roomName[100];
 	char *dungeonPath[100];
 
+	//set up rooms
 	initiateRooms(rooms, MAX_DUNEGON_ROOMS);
-	getRoomFiles(latestDir, rooms);
 
-	//seg fault
-	//currentRoom = getStartingRoom(rooms);
+	//fill rooms with info and get the index for the START_ROOM
+	int entrance = fillRooms(latestDir, rooms, currentRoom);
+	printRooms(rooms);
+	currentRoom = entrance;
 
+	//do while endGame != 1 (gameover)
 	do {
 		printf("CURRENT LOCATION: %s\n", rooms[currentRoom]->roomName);
 		
 		printf("POSSIBLE CONNECTIONS: ");
 		//printed like this to keep , , . punctuation
-		printf("%s ", rooms[currentRoom]->connections[0]);
+		printf("%s", rooms[currentRoom]->connections[0]);
 		for (int i = 1; i < rooms[currentRoom]->numConnectingRooms; i++){
-			printf(", %s ", rooms[currentRoom]->connections[i]);
+			printf(", %s", rooms[currentRoom]->connections[i]);
 		}
 		printf(".\n");
 
-		printf("WHERE TO? >");
-		//scanf("%s", roomName);
+		printf("\nWHERE TO? >");
+
+		/************************/
+		//uncomment before submission
+		scanf("%s", roomName);
+		/************************/
 
 		//if the inputed name doesnt match send error message
+
 		if (checkConnection(rooms[currentRoom], roomName) == 0){
-			printf("\nHUH? I DON'T UNDERSTAND THAT ROOM. TRY AGAIN.\n");
+			printf("\nHUH? I DON'T UNDERSTAND THAT ROOM. TRY AGAIN.\n\n");
 		} 
 		//if it does match then it is a valid path 
 		else {
+			printf("\n");
 			dungeonPath[stepCount] = rooms[currentRoom]->roomName;
 			stepCount++;
-			currentRoom = getRoomByName(rooms[currentRoom], roomName);
-		}
+			currentRoom = getRoomByName(rooms, roomName);
+			printf("%d\n", currentRoom);
 
-		//seg fault
-		/*if (strcmp(rooms[currentRoom]->roomType, "END_ROOM" ) == 0){
-			endGame = 1;
-		}*/
+			if (strcmp(rooms[currentRoom]->roomType, "END_ROOM" ) == 0){
+				endGame = 1;
+			}
+		}
 
 	} while (endGame != 1);
 
 	printf("YOU HAVE FOUND THE END ROOM. CONGRATULATIONS!\n");
 	printf("YOU TOOK %d STEPS. YOUR PATH TO VICORY WAS: \n", stepCount);
-	for (int i = 0; i < stepCount; i++){
+	for (int i = 1; i < stepCount; i++){
 		printf("%s\n", dungeonPath[i]);
 	}
+	printf("%s\n", rooms[currentRoom]->roomName);
 
+	//free memory
+	free(latestDir);
 	deleteRooms(rooms, MAX_DUNEGON_ROOMS);
 	return 0;
 }
 
+/*Function was based on lecture notes
+ *Takes a pointer to a directory path and is passed a predefined prefix
+ *Returns the most recently updated directory from buildrooms*/
 char *findLatestDirectory(char *path, char *prefix){
 	struct stat dirStat;
 	struct dirent *aDir;
@@ -110,8 +127,10 @@ char *findLatestDirectory(char *path, char *prefix){
 	//open the direcotry
 	DIR *currentDir = opendir(path);
 
+	//while you can read the directory
 	while ((aDir = readdir(currentDir)) != NULL){
 		
+		//if the passed in prefix matches the directory name perform a stat call to get its info
 		if (strncmp(prefix, aDir->d_name, strlen(prefix)) == 0){
 			stat(aDir->d_name, &dirStat);
 			
@@ -122,6 +141,7 @@ char *findLatestDirectory(char *path, char *prefix){
 				strcpy(dirName, aDir->d_name);
 			}
 
+			//move along
 			i++;
 		}
 	}
@@ -136,35 +156,9 @@ char *findLatestDirectory(char *path, char *prefix){
 	return latestDirName;
 }
 
-void getRoomFiles(char* recentDir, struct Room *rooms[]){
-
-	char targetFileSuffix[50] = "room";
-	char roomFileName[20];
-	memset(roomFileName, '\0', sizeof(roomFileName));
-
-	DIR *dirToCheck;
-	struct dirent *fileInDir;
-
-	int currentRoomNum = 0;
-
-	dirToCheck = opendir(recentDir);
-	if (dirToCheck > 0){
-		while ((fileInDir = readdir(dirToCheck)) != NULL){
-			//6
-			 //if (strstr(fileInDir->d_name, targetFileSuffix) != NULL){
-				//0
-				memset(roomFileName, '\0', sizeof(roomFileName));
-				strcpy(roomFileName, fileInDir->d_name);
-				//printf("Room File Name: %s\n", roomFileName);
-
-				parseRoomFile(roomFileName, recentDir, rooms);
-				currentRoomNum++;
-			//}
-		}
-	}
-	closedir(dirToCheck);
-}
-
+/*Function to create and set the rooms to their starting values
+ *Takes a pointer to the rooms and the size of the dungeon
+ *Returns N/A*/
 void initiateRooms(struct Room *rooms[], int size){
 	for (int i = 0; i < size; i++){
 		rooms[i] = malloc (sizeof(struct Room));
@@ -177,110 +171,127 @@ void initiateRooms(struct Room *rooms[], int size){
 	}
 }
 
+/*Function to free the rooms memory
+ *Takes a pointer to the rooms and the size of the dungeon
+ *Returns N/A*/
 void deleteRooms(struct Room *rooms[], int size){
 	for (int i = 0; i < size; i++){
 		free(rooms[i]);
 	}
 }
 
-void parseRoomFile(char *roomFileName, char *dirName, struct Room *rooms[]){
-	char roomPathName[50];
-	memset(roomPathName, '\0', sizeof(roomPathName));
-	sprintf(roomPathName, "./%s/%s", dirName, roomFileName);
-	//printf("Room Path Name: %s\n", roomPathName);
+/*Function to fill the room structs with their data from the files
+ *Takes a pointer to most recent direcotry, pointer to rooms and a pointer to the current room (will be set as the first room  "START_ROOM")
+ *Returns an int for successful completion*/
+int fillRooms(const char *dirName, struct Room *rooms[], int firstRoom){
+	struct dirent *aDir;
+	DIR *dir;
+	FILE *file;
+	char buffer[100];
+	char filePath[100];
+	int currentRoom = 0;
+	int itemCount = 0;
+	int conCount = 0;
 
-	char field1[20];
-	char field2[20];
-	char value[20];
+	//open directory
+	dir = opendir(dirName);
+	//while you still have file to read from directory 
+	while ((aDir = readdir(dir))){
+		//ignore the parent directories
+		if (strlen(aDir->d_name) > 2){
+			sprintf(filePath, "./%s/%s", dirName, aDir->d_name);
+			
+			//open file as read only
+			file = fopen(filePath, "r");
 
-	int connectionsNum = 0;
+			//reset item count
+			itemCount = 0;
+			conCount = 0;
 
-	FILE *fp;
-	char *line = NULL;
-	size_t len = 0;
-	//ssize_t read;
+			while (fgets(buffer, 100, file)!= NULL){
+				//put room names in struct
+				rooms[currentRoom]->roomName = aDir->d_name;
 
-	//open room file to read
-	fp = fopen(roomPathName, "r");
+				//breaks the line off into smaller sections 
+				//gets rid of spaces (and :) and reads to \n which leaves the name of the room 
+				char *data = strtok(buffer, " ");
+					//look for the work connection
+					if(strcmp(data, "CONNECTION") == 0){
+						data = strtok(NULL, " ");
+						data = strtok(NULL, "\n");
 
-	while ((getline(&line, &len, fp)) != -1){
-		//uncomment me to see room info untouched
-		//printf("%s", line);
-
-		memset(field1, '\0', sizeof(field1));
-		memset(field2, '\0', sizeof(field2));
-		memset(value, '\0', sizeof(value));
-
-		sscanf(line, "%s %s %s\n", field1, field2, value);
-		//uncomment me to see room info parsed into 3 sections
-		//printf("field1: '%s' field2: '%s' value: '%s'\n", field1, field2, value);
-		
-
-		//this doesnt work and is a mess.  But I am trying to go with a similar logic 
-/*		for (int i = 0; i < MAX_DUNEGON_ROOMS; i++){
-			//printf("%d - field1: '%s'\nfield2: '%s'\nvalue: '%s'\n", i, field1, field2, value);
-			if (strcmp(field2, "NAME:") == 0){
-				//printf("*%s -", value);
-				//rooms[i]->roomName = value;
-				//printf("ROOM %d: %s\n", i, rooms[i]->roomName);
-			} else if (strcmp(field2, "TYPE:") == 0){
-				if (strstr(value, "START") != NULL){
-					//printf("*%s -\n", value);
-					rooms[i]->roomType = "START_ROOM";
-					//printf("TYPE: %s\n", rooms[i]->roomType);
-				}
-				
-			} else {
-				//printf("*%s", value);
+						//This section of code made me chage the structure of the struct from 
+						//having an array of structs to just having an arry of ints to keep track 
+						//of the connections 
+						for (int j = 0; j < 10; j++){
+							if(strcmp(data, NAMES[j]) == 0){ 
+								rooms[currentRoom]->connections[conCount++] = NAMES[j];
+							}	
+						}
+						//update how many connecting rooms there are 
+						rooms[currentRoom]->numConnectingRooms++;
+					} else {
+						data = strtok(NULL, " ");
+						data = strtok(NULL, "\n");
+						//else put room types in struct
+						for (int i = 0; i < MAX_DUNEGON_ROOMS; i++){
+							if (strcmp(data, "START_ROOM") == 0){
+								rooms[currentRoom]->roomType = "START_ROOM";
+								firstRoom = currentRoom;
+							} else if (strcmp(data, "END_ROOM") == 0){
+								rooms[currentRoom]->roomType = "END_ROOM";
+							} else{
+								rooms[currentRoom]->roomType = "MID_ROOM";
+							}
+						} 
+					}
+					itemCount++;
 			}
-		}*/
-
-	} 
-	//extra space to help visualize rooms
-	//printf("\n");
+			currentRoom++;
+		}
+	}
+	return firstRoom;
 }
 
-int getStartingRoom(struct Room *rooms[]){
+/*Function to check if there is a connection between two room names 
+ *Takes a pointer to rooms and a pointer to a room name to check 
+ *Returns an int for successful completion*/
+int checkConnection(struct Room *room, char roomName[]){
+	for (int i = 0; i < room->numConnectingRooms; i++){
+		if (roomName == NULL) return 0;
+        if (room->connections[i] == NULL) return 0;
+		if (strcmp(roomName, room->connections[i]) == 0){
+			//match found
+			return 1;
+		}
+	}
+	return 0;
+}
+
+/*Function get a room index
+ *Takes a pointer to rooms and a pointer to a room name to check 
+ *Returns an index on successful completion*/
+int getRoomByName(struct Room *rooms[], char roomName[]){
 	for (int i = 0; i < MAX_DUNEGON_ROOMS; i++){
-		if (strcmp(rooms[i]->roomType, "START_ROOM") == 0)
+		if (strcmp(roomName, rooms[i]->roomName) == 0){
 			return i;
-			
+		}
 	}
 	return -1;
 }
 
-
-int checkConnection(struct Room *room, char roomName[]){
-	for (int i = 0; i < room->numConnectingRooms; i++){
-		if (strcmp(roomName, room->connections[i]) == 0){
-			return 1;
-		}
-	}
-	return 0;
-}
-
-int getRoomByName(struct Room *room, char roomName[]){
-	for (int i = 0; i < room->numConnectingRooms; i++){
-		if (strcmp(roomName, room->roomName) == 0){
-			return 1;
-		}
-	}
-	return 0;
-}
-
+/*Function to print the rooms
+ *Takes a pointer to rooms
+ *Returns N/A*/
 void printRooms(struct Room *rooms[]){
-	for (int i = 0; i < MAX_DUNEGON_ROOMS; i++){
-		printf("Name: %s",rooms[i]->roomName);
-		printf(" - Type: %s",rooms[i]->roomType);
-		printf("- Num of Connections: %d",rooms[i]->numConnectingRooms);
-		printf("- Connections: ");
-		for (int j = 0; j < MAX_DUNEGON_ROOMS - 1; j++){
+	for (int i = 0; i < 7; i++){
+		printf("ROOM %d:\n", i);
+		printf("Name: %s\n",rooms[i]->roomName);
+		printf("Connections: ");
+		for (int j = 0; j < rooms[i]->numConnectingRooms; j++){ 	//rooms[i]->numConnectingRooms
 			printf("%s, ", rooms[i]->connections[j]);
 		}
 		printf("\n");
+		printf("Type: %s\n\n", rooms[i]->roomType);
 	}
 }
-
-
-
-

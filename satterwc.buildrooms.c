@@ -62,7 +62,7 @@ int main(){
 
 	//create file note: file name = satterwc.rooms.random_number
 	char dirName[100];
-	sprintf(dirName, "satterwc.rooms.%d/", random);
+	sprintf(dirName, "satterwc.rooms.%d", random);
 	//printf("%s\n", fileName ); 
 	//permissions set to create, read and write for the creator, no one else can change it
 	mkdir(dirName, 0777); 
@@ -77,6 +77,11 @@ int main(){
 	
 	//create the room files and place it into the directory 
 	makeRoomFiles(rooms, dirName);
+
+	//free memory
+	for (int i = 0; i < MAX_DUNEGON_ROOMS; ++i){
+		free(rooms[i]);
+	}
 
 	return 0;
 }
